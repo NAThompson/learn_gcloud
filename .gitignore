@@ -1,0 +1,17 @@
+__pycache__
+*.log
+*.toc
+*.nav
+*.aux
+*.gz
+*.vrb
+*.out
+*.snm
+bin/
+lib/
+lib64
+pyvenv.cfg
+django_example/db.sqlite3
+django_example/static_root/
+django_example/jobs/migrations/
+_minted-talk/
