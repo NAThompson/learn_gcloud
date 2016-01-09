@@ -17,19 +17,87 @@ urlcolor=blue
 \frame{\titlepage}
 
 \begin{frame}[fragile]
+  \frametitle{Goals of this discussion}
+  \pause
+  \begin{itemize}
+  \item Learn how to rent CPUs and RAM from google
+    \pause
+  \item Learn how to rent persistent disks
+    \pause
+  \item Learn how to control expenses
+    \pause
+  \item Learn how to manage permissions
+    \pause
+  \item Learn how to create teams of identical VMs
+    \pause
+  \item Learn how to autoscale nodes based on load
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
 \frametitle{Getting started:}
 \begin{minted}{bash}
-  $ curl https://sdk.cloud.google.com | bash
+ $ curl https://sdk.cloud.google.com | bash
   $ exec -l $SHELL
   $ gcloud init
   $ gcloud auth login
   $ firefox https://console.developers.google.com
 \end{minted}
-Near as I can tell, you must have a gmail account to use gcloud.
+You don't need a gmail account to use gcloud, but you must enter an email into gcloud that then becomes your google account login.
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Setting up instances}
+  \frametitle{Starting a Project}
+  \begin{figure}
+    \includegraphics[scale=0.2]{figures/CreateProject.png}
+  \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Starting a Project}
+  Each project has
+  \pause
+  \begin{itemize}
+  \item its bill separated in the invoice (1 billing account $\mapsto$ many project accounts)
+    \pause
+  \item its own VMs
+    \pause
+  \item its own persistent disks
+    \pause
+  \item its own users with their associated permissions.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Starting a Project}
+  Multiple people can be listed as project owners, or given read access, or read/write access to the project:
+  \begin{figure}
+    \includegraphics[scale=0.2]{figures/AddProjectOwner.png}
+  \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Starting a project}
+  You need tell the gcloud command-line tool that you've created a new project:
+  \begin{minted}{bash}
+    $ gcloud config list
+    [core]
+    account = nickadamthompson@gmail.com
+    disable_usage_reporting = True
+    project = graphical-cairn-97618 
+    [meta]
+    active_config = default
+  \end{minted}
+  If the \texttt{project} field has the wrong value, you need to set it:
+  \begin{minted}{bash}
+    $ gcloud config set project learngcloud-1184
+  \end{minted}
+  Note that you don't set the project \emph{name}, you set the project \emph{ID}.
+\end{frame}
+
+
+\begin{frame}[fragile]
+  \frametitle{Setting up instances (=VMs)}
   \begin{figure}
     \includegraphics[scale=0.3]{figures/CreateInstance.png}
   \end{figure}
@@ -40,7 +108,11 @@ Near as I can tell, you must have a gmail account to use gcloud.
   Things to choose at this point:
   \pause
   \begin{itemize}
-  \item Number of cores, amount of RAM, size of disk, SSD or spinning
+  \item Number of cores (max 32)
+    \pause
+  \item amount of RAM (unlimited, it seems, but 200GB is supported for sure)
+    \pause
+  \item size of disk, SSD (max 10TB) or spinning (max 10TB) 
     \pause
   \item Operating system (Ubuntu, Centos, CoreOS), or choose a VM snapshot
     \pause
@@ -51,8 +123,68 @@ Near as I can tell, you must have a gmail account to use gcloud.
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Setting up instances}
+  \frametitle{Setting up and instance}
+  Aside: If you need more than 10TB of disk space, you need to fill out the \href{https://docs.google.com/a/google.com/forms/d/1vb2MkAr9JcHrp6myQ3oTxCyBv2c7Iyc5wqIKqE3K4IE/viewform}{Google Compute Engine Quota Change Request Form}.
 \end{frame}
 
+\begin{frame}[fragile]
+  \frametitle{Setting up an instance}
+  Once you create a VM, you'll be assigned an external IP address and can see the load on your server:
+  \begin{figure}
+    \includegraphics[scale=0.2]{figures/VMUp.png}
+  \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Setting up an instance}
+  To access your VM, use:
+  \begin{minted}{bash}
+    $ gcloud compute ssh myfirstvm --zone us-central1-b
+  \end{minted}
+  (Don't choose the wrong zone or else your instance won't be found!)
+
+  This is really a wrapper script around the IP address of your instance:
+  \begin{minted}{bash}
+    $ ssh -i ~/.ssh/google_compute_engine 104.154.88.253
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Editing Firewalls}
+  Google cloud has a set of default firewall rules that you might like to edit:
+  \begin{figure}
+    \includegraphics[scale=0.2]{figures/DefaultFirewall.png}
+  \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Editing Firewalls}
+  The default rules are of course reflected in the port scan:
+  \begin{minted}{bash}
+    $ nmap -p 0-10000 104.154.88.253
+
+    Starting Nmap 6.47 ( http://nmap.org ) at 2016-01-08 17:43 CST
+    Nmap scan report for 253.88.154.104.bc.googleusercontent.com (104.154.88.253)
+    Host is up (0.040s latency).
+    Not shown: 9997 filtered ports
+    PORT     STATE  SERVICE
+    22/tcp   open   ssh
+    80/tcp   closed http
+    443/tcp  closed https
+    3389/tcp closed ms-wbt-server
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Editing firewalls}
+  This allows traffic from AMQP:
+  \begin{figure}
+    \includegraphics[scale=0.2]{figures/DefineFirewall.png}
+  \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{}
+\end{frame}
 
 \end{document}
