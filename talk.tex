@@ -150,6 +150,15 @@ You don't need a gmail account to use gcloud, but you must enter an email into g
 \end{frame}
 
 \begin{frame}[fragile]
+  \frametitle{Setting up an instance}
+  For every console action, there is a equivalent gcloud command. So, for example, to set up an instance, you could type
+  \begin{minted}{bash}
+    $ gcloud compute instances create mysecondvm --image ubuntu-15-10 --zone us-central1-b
+  \end{minted}
+  This is useful for scripting.
+\end{frame}
+
+\begin{frame}[fragile]
   \frametitle{Editing Firewalls}
   Google cloud has a set of default firewall rules that you might like to edit:
   \begin{figure}
@@ -184,7 +193,92 @@ You don't need a gmail account to use gcloud, but you must enter an email into g
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{}
+  \frametitle{Editing firewalls}
+  Command line to allow AMQP on port 5672 from any source IP, use the command
+  \begin{minted}{bash}
+    $ gcloud compute firewall-rules create default-allow-amqp --allow tcp:5672
+    Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/global/firewalls/default-allow-amqp].
+    NAME               NETWORK SRC_RANGES RULES    SRC_TAGS TARGET_TAGS
+    default-allow-amqp default 0.0.0.0/0  tcp:5672
+  \end{minted}
+  Creating a firewall rule applies it to all live instances in the project.
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Persistent Disks}
+  If you need storage that is not chained to a particular VM, then you need to use ``buckets'':
+  \begin{figure}
+    \includegraphics[scale=0.2]{figures/Buckets.png}
+  \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Persistent Disks}
+  In order to manage persistent disks from the command line, use the gsutil utility:
+  \begin{minted}{bash}
+    $ pip install gsutil
+    $ gsutil mb gs://myfirstbucket
+    Creating gs://myfirstbucket/...
+    ServiceException: 409 Bucket myfirstbucket already exists.
+    $ gsutil mb gs://myfirstbucket123
+    Creating gs://myfirstbucket123/...
+    $ gsutil cp talk.log gs://myfirstbucket123
+    Copying file://talk.log [Content-Type=application/octet-stream]...
+    Uploading   gs://myfirstbucket123/talk.log:                      43.94 KiB/43.94 KiB
+    ~/learn_gcloud$ gsutil ls
+    gs://myfirstbucket123/
+    $ gsutil ls -l gs://myfirstbucket123
+    44993  2016-01-09T21:19:30Z  gs://myfirstbucket123/talk.log
+    TOTAL: 1 objects, 44993 bytes (43.94 KiB)
+  \end{minted}
+  We can see that bucket names need to be globally unique.
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Persistent Disks}
+  \begin{itemize}
+  \item gcloud buckets are encrypted on disk
+  \item gcloud buckets are accessible outside zones
+  \item Uploads to gcloud buckets are atomic and considered successful once the info is stored in multiple datacenters.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Persistent Disks}
+  Mounting a bucket to an instance takes a little work (\href{https://github.com/googlecloudplatform/gcsfuse/blob/master/docs/installing.md}{instructions}):
+  \begin{minted}{bash}
+    $ curl -L -O https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/v0.15.0/gcsfuse_0.15.0_amd64.deb
+    $ sudo dpkg --install gcsfuse_0.15.0_amd64.deb
+    $ mkdir mount_point
+    $ gcsfuse myfirstbucket123 mount_point
+    $ time ls mount_point
+    talk.log
+
+    real0m2.557s
+    $ touch mount_point/file.txt
+    touch: cannot touch ‘mount_point/file.txt’: Input/output error
+  \end{minted}
+  These networked disks are \emph{incredibly slow}, even read-only.
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Persistent Disks}
+  The need to access to persistent disks via APIs in various languages is very common. gcloud has Python, Node.js, Java, and Ruby bindings. Let's see an example in Python:
+  \begin{minted}{python}
+    $ pip3 install git+https://github.com/GoogleCloudPlatform/gcloud-python.git
+    $ python3 -q
+    >>> from gcloud import storage
+    >>> client = storage.Client(project='learngloud-1184', credentials='')
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Final Advice}
+  \begin{itemize}
+  \item Cloud providers are competing on price, offering the same commercial hardware; this business is difficult.
+  \item Their strategy is to lock in their customers via making wrapper scripts around open-source softwares and trying to convince people to use them (e.g., gcloud sql = wrapped mysql) 
+  \item If you use these, you will have no hope of migrating your stack to another provider, and they can charge you whatever they want.
+  \end{itemize}
 \end{frame}
 
 \end{document}
