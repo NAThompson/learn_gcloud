@@ -97,14 +97,14 @@ You don't need a gmail account to use gcloud, but you must enter an email into g
 
 
 \begin{frame}[fragile]
-  \frametitle{Setting up instances (=VMs)}
+  \frametitle{Setting up an instance}
   \begin{figure}
     \includegraphics[scale=0.3]{figures/CreateInstance.png}
   \end{figure}
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Setting up instances}
+  \frametitle{Setting up an instance}
   Things to choose at this point:
   \pause
   \begin{itemize}
@@ -123,7 +123,7 @@ You don't need a gmail account to use gcloud, but you must enter an email into g
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Setting up and instance}
+  \frametitle{Setting up an instance}
   Aside: If you need more than 10TB of disk space, you need to fill out the \href{https://docs.google.com/a/google.com/forms/d/1vb2MkAr9JcHrp6myQ3oTxCyBv2c7Iyc5wqIKqE3K4IE/viewform}{Google Compute Engine Quota Change Request Form}.
 \end{frame}
 
@@ -156,6 +156,101 @@ You don't need a gmail account to use gcloud, but you must enter an email into g
     $ gcloud compute instances create mysecondvm --image ubuntu-15-10 --zone us-central1-b
   \end{minted}
   This is useful for scripting.
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Snapshotting an instance}
+  Once you have installed your favorite software on your VM, you might want to snapshot it:
+  \begin{minted}{bash}
+myfirstvm$ sudo apt-get update
+myfirstvm$ sudo apt-get install -y gcc g++ emacs git python3-dev python3-pip
+myfirstvm$ sudo touch /opt/hello.txt && sudo chmod a+rw /opt/hello.txt
+myfirstvm$ echo "Hello from GCE!" >> /opt/hello.txt
+myfirstvm$ exit
+localhost$ gcloud compute disks snapshot "myfirstvm" --zone "us-central1-b" --snapshot-names "firstvmsnapshot"
+  \end{minted}  
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Snapshotting an instance}
+  Of course, using the console GUI is a bit easier:
+  \begin{figure}
+    \includegraphics[scale=0.3]{figures/SnapshotVM.png}
+  \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Snapshotting an instance}
+  Once you have a snapshot, you can create a boot disk from it:
+\begin{figure}
+  \includegraphics[scale=0.3]{figures/BootDisk.png}
+\end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Snapshotting an instance}
+  And once you have a boot disk, you can create a VM from it:
+  \begin{figure}
+    \includegraphics[scale=0.3]{figures/VMFromBootDisk.png}
+  \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Replicating VMs}
+  A boot disk can only be attached in RW mode to a single instance. To attach a boot disk in read-only mode to many instances, use
+  \begin{minted}{bash}
+$ gcloud compute instances create vm-{1..3} --zone us-central1-b \
+   --disk name=firstvm-boot-disk,boot=yes,mode=ro
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Regions and Zones}
+  Google divides the world into regions:
+  \begin{minted}{bash}
+$ gcloud compute regions list
+NAME         CPUS          DISKS_GB     ADDRESSES RESERVED_ADDRESSES STATUS TURNDOWN_DATE
+asia-east1      0.00/24.00     10/10240      0/23      0/7           UP
+europe-west1    0.00/24.00      0/10240      0/23      0/7           UP
+us-central1     4.00/24.00     40/10240      4/23      0/7           UP
+us-east1        0.00/24.00      0/10240      0/23      0/7           UP
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Regions and Zones}
+  And each region is divided into multiple zones
+\begin{minted}{bash}
+$ gcloud compute zones list
+NAME           REGION       STATUS NEXT_MAINTENANCE TURNDOWN_DATE
+asia-east1-a   asia-east1   UP
+asia-east1-b   asia-east1   UP
+asia-east1-c   asia-east1   UP
+europe-west1-b europe-west1 UP
+europe-west1-d europe-west1 UP
+europe-west1-c europe-west1 UP
+us-central1-c  us-central1  UP
+us-central1-a  us-central1  UP
+us-central1-f  us-central1  UP
+us-central1-b  us-central1  UP
+us-east1-c     us-east1     UP
+us-east1-b     us-east1     UP
+us-east1-d     us-east1     UP
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Regions and Zones}
+  A zone is essentially single datacenter, so two instances in a zone can communicate very quickly with one another:
+  \begin{minted}{bash}
+    vmcentral1b-1$ ping vmcentral1b-2 # ping VM in same datacenter/zone:
+    rtt min/avg/max/mdev = 0.308/0.394/0.841/0.104 ms
+    vmcentral1b-1$ ping vmcentral1a # Ping VM in same region, different zone:
+    rtt min/avg/max/mdev = 0.571/0.673/1.210/0.099 ms
+    vmcentral1b-1$ ping vm-in-asia 
+    rtt min/avg/max/mdev = 154.738/154.878/155.326/0.442 ms
+  \end{minted}
+  So within-zone communication is fastest, within-region is fast, between-region is slow.
 \end{frame}
 
 \begin{frame}[fragile]
