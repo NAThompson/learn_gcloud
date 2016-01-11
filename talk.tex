@@ -250,7 +250,7 @@ us-east1-d     us-east1     UP
     vmcentral1b-1$ ping vm-in-asia 
     rtt min/avg/max/mdev = 154.738/154.878/155.326/0.442 ms
   \end{minted}
-  So within-zone communication is fastest, within-region is fast, between-region is slow.
+  So within-zone communication is fastest, within-region is fast, between-region is slow. (Note how your instance names are resolved via DNS!)
 \end{frame}
 
 \begin{frame}[fragile]
@@ -259,6 +259,20 @@ us-east1-d     us-east1     UP
   \begin{figure}
     \includegraphics[scale=0.2]{figures/DefaultFirewall.png}
   \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+Note that all ports are available via the internal ip addresses 10.240.0.0/16
+  \begin{minted}{bash}
+$ gcloud compute firewall-rules list
+NAME                   NETWORK SRC_RANGES    RULES                        SRC_TAGS TARGET_TAGS
+default-allow-http     default 0.0.0.0/0     tcp:80                                http-server
+default-allow-https    default 0.0.0.0/0     tcp:443                               https-server
+default-allow-icmp     default 0.0.0.0/0     icmp
+default-allow-internal default 10.240.0.0/16 tcp:0-65535,udp:0-65535,icmp
+default-allow-ssh      default 0.0.0.0/0     tcp:22    
+  \end{minted}
+
 \end{frame}
 
 \begin{frame}[fragile]
@@ -300,6 +314,49 @@ us-east1-d     us-east1     UP
 \end{frame}
 
 \begin{frame}[fragile]
+  \frametitle{Networking}
+  Each project supports a $2^{16} = 65,536$ address internal network:
+  \begin{minted}{bash}
+$ gcloud compute networks list
+NAME    IPV4_RANGE    GATEWAY_IPV4
+default 10.240.0.0/16 10.240.0.1    
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Load balancing}
+  Let's set up a couple servers to learn how to load balance:
+  \begin{minted}{bash}
+$ gcloud compute instances create httpserver1 --tags frontend --zone us-central1-a
+$ gcloud compute firewall-rules create http-frontend --allow tcp:80 --target-tags frontend
+$ gcloud compute ssh httpserver1
+httpserver1$ sudo apt-get update && sudo apt-get install -y nginx
+httpserver1$ sudo emacs /var/www/html/index.nginx-debian.html 
+  \end{minted}
+Edit the file so that it tells us what server it comes from; do the same for httpserver2.
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Load Balancing}
+  Now let's set up a ``target-pool'', a group of server that responds to requests:
+\begin{minted}{bash}
+$ gcloud compute target-pools create frontends --region us-central1
+$ gcloud compute target-pools add-instances frontends --instances httpserver1 --zone us-central1-a
+$ gcloud compute target-pools add-instances frontends --instances httpserver2 --zone us-central1-b
+$ gcloud compute forwarding-rules create frontends --target-pool frontends --region us-central1
+NAME      REGION      IP_ADDRESS     IP_PROTOCOL TARGET
+frontends us-central1 104.154.36.151 TCP         us-central1/targetPools/frontends
+$ for i in {1..100}; do curl 104.154.36.151; done
+Welcome to httpserver2!
+Welcome to httpserver1!
+Welcome to httpserver2!
+Welcome to httpserver2!
+Welcome to httpserver1!
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[fragile]
   \frametitle{Persistent Disks}
   If you need storage that is not chained to a particular VM, then you need to use ``buckets'':
   \begin{figure}
@@ -326,7 +383,7 @@ us-east1-d     us-east1     UP
     44993  2016-01-09T21:19:30Z  gs://myfirstbucket123/talk.log
     TOTAL: 1 objects, 44993 bytes (43.94 KiB)
   \end{minted}
-  We can see that bucket names need to be globally unique.
+  Bucket names need to be globally unique across all of gcloud!
 \end{frame}
 
 \begin{frame}[fragile]
@@ -335,25 +392,43 @@ us-east1-d     us-east1     UP
   \item gcloud buckets are encrypted on disk
   \item gcloud buckets are accessible outside zones
   \item Uploads to gcloud buckets are atomic and considered successful once the info is stored in multiple datacenters.
+  \item BLOBs in buckets \emph{cannot be edited}. They can be overwritten, however.
   \end{itemize}
 \end{frame}
 
 \begin{frame}[fragile]
   \frametitle{Persistent Disks}
   Mounting a bucket to an instance takes a little work (\href{https://github.com/googlecloudplatform/gcsfuse/blob/master/docs/installing.md}{instructions}):
-  \begin{minted}{bash}
-    $ curl -L -O https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/v0.15.0/gcsfuse_0.15.0_amd64.deb
-    $ sudo dpkg --install gcsfuse_0.15.0_amd64.deb
-    $ mkdir mount_point
-    $ gcsfuse myfirstbucket123 mount_point
-    $ time ls mount_point
-    talk.log
-
-    real0m2.557s
-    $ touch mount_point/file.txt
-    touch: cannot touch ‘mount_point/file.txt’: Input/output error
-  \end{minted}
+\begin{minted}{bash}
+$ curl -L -O https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/v0.15.0/gcsfuse_0.15.0_amd64.deb
+$ sudo dpkg --install gcsfuse_0.15.0_amd64.deb
+$ mkdir mount_point
+$ gcsfuse myfirstbucket123 mount_point
+$ time ls mount_point
+  talk.log
+  real0m2.557s
+$ touch mount_point/file.txt
+touch: cannot touch ‘mount_point/file.txt’: Input/output error
+\end{minted}
   These networked disks are \emph{incredibly slow}, even read-only.
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Persistent Disks}
+  A few more \texttt{gsutil} examples:
+  \begin{minted}{bash}
+$ gsutil rsync gs://myfirstbucket123/  `pwd`
+Building synchronization state...
+Starting synchronization
+Copying gs://myfirstbucket123/talk.log...
+Downloading file:///home/NAThompson/talk.log:                    43.94 KiB/43.94 KiB
+$ gsutil rsync `pwd` gs://myfirstbucket123/foo
+Building synchronization state...
+Starting synchronization
+...
+$ gsutil du -h gs://myfirstbucket123
+43.94 KiB   gs://myfirstbucket123/talk.log
+  \end{minted}
 \end{frame}
 
 \begin{frame}[fragile]
