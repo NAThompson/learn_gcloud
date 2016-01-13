@@ -43,6 +43,10 @@ urlcolor=blue
   \item The REST (representational state transfer) interface
     \pause
   \item gcloud sql
+    \pause
+  \item Google Container Engine
+    \pause
+  \item Lots more . . .
   \end{itemize}
 \end{frame}
 
@@ -107,6 +111,15 @@ or visit the \href{https://cloud.google.com/compute/docs/access/user-accounts/}{
 \end{frame}
 
 \begin{frame}[fragile]
+  \frametitle{gcloud user accounts}
+  Users with read-only access to your project have root on your VMs, but they can't launch new VMs on your dime:
+  \begin{figure}
+    \includegraphics[scale=0.2]{figures/CantCreateVM.png}
+  \end{figure}
+\end{frame}
+
+
+\begin{frame}[fragile]
   \frametitle{Starting a project}
   You need tell the gcloud command-line tool that you've created a new project:
   \begin{minted}{bash}
@@ -138,9 +151,9 @@ or visit the \href{https://cloud.google.com/compute/docs/access/user-accounts/}{
   Things to choose at this point:
   \pause
   \begin{itemize}
-  \item Number of cores (max 32)
+  \item Number of cores (min ~1/2, max 32)
     \pause
-  \item amount of RAM (unlimited, it seems, but 200GB is supported for sure)
+  \item amount of RAM (min 0.6GB, max unlimited, it seems, but 200GB is supported for sure)
     \pause
   \item size of disk, SSD (max 10TB) or spinning (max 10TB) 
     \pause
@@ -336,12 +349,13 @@ default-allow-ssh      default 0.0.0.0/0     tcp:22
 \begin{frame}[fragile]
   \frametitle{Editing firewalls}
   Command line to allow AMQP on port 5672 from any source IP, use the command
-  \begin{minted}{bash}
-    $ gcloud compute firewall-rules create default-allow-amqp --allow tcp:5672
-    Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/global/firewalls/default-allow-amqp].
-    NAME               NETWORK SRC_RANGES RULES    SRC_TAGS TARGET_TAGS
-    default-allow-amqp default 0.0.0.0/0  tcp:5672
-  \end{minted}
+\begin{minted}{bash}
+$ gcloud compute firewall-rules \ 
+   create default-allow-amqp --allow tcp:5672
+Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/global/firewalls/default-allow-amqp].
+NAME               NETWORK SRC_RANGES RULES    SRC_TAGS TARGET_TAGS
+default-allow-amqp default 0.0.0.0/0  tcp:5672
+\end{minted}
   Creating a firewall rule applies it to all live instances in the project.
 \end{frame}
 
@@ -359,10 +373,12 @@ default 10.240.0.0/16 10.240.0.1
   \frametitle{Load balancing}
   Let's set up a couple servers to learn how to load balance:
   \begin{minted}{bash}
-$ gcloud compute instances create httpserver1 --tags frontend --zone us-central1-a
-$ gcloud compute firewall-rules create http-frontend --allow tcp:80 --target-tags frontend
-$ gcloud compute ssh httpserver1
-httpserver1$ sudo apt-get update && sudo apt-get install -y nginx
+$ gcloud compute instances create server-{1..3} \
+    --tags frontends --zone us-central1-a
+$ gcloud compute firewall-rules \
+    create allow80 --allow tcp:80 --target-tags frontends
+$ gcloud compute ssh httpserver-1
+httpserver1$ sudo apt-get update && sudo apt-get install -y nginx emacs
 httpserver1$ sudo emacs /var/www/html/index.nginx-debian.html 
   \end{minted}
 Edit the file so that it tells us what server it comes from; do the same for httpserver2.
@@ -372,21 +388,91 @@ Edit the file so that it tells us what server it comes from; do the same for htt
   \frametitle{Load Balancing}
   Now let's set up a ``target-pool'', a group of server that responds to requests:
 \begin{minted}{bash}
-$ gcloud compute target-pools create frontends --region us-central1
-$ gcloud compute target-pools add-instances frontends --instances httpserver1 --zone us-central1-a
-$ gcloud compute target-pools add-instances frontends --instances httpserver2 --zone us-central1-b
-$ gcloud compute forwarding-rules create frontends --target-pool frontends --region us-central1
+$ gcloud compute target-pools create \
+    frontend-targetpool --region us-central1
+$ gcloud compute target-pools add-instances \ 
+    frontend-targetppol --instances server-{1..3} --zone us-central1-a
+$ gcloud compute forwarding-rules create \
+  frontend-forwarding --target-pool frontend-targetpool --region us-central1
 NAME      REGION      IP_ADDRESS     IP_PROTOCOL TARGET
 frontends us-central1 104.154.36.151 TCP         us-central1/targetPools/frontends
 $ for i in {1..100}; do curl 104.154.36.151; done
-Welcome to httpserver2!
-Welcome to httpserver1!
-Welcome to httpserver2!
-Welcome to httpserver2!
-Welcome to httpserver1!
+Welcome to server-1!
+Welcome to server-1!
+Welcome to server-3!
+Welcome to server-2!
+Welcome to server-1!
 \end{minted}
 \end{frame}
 
+\begin{frame}[fragile]
+  \frametitle{Load Balancing}
+  What happens if one of our servers stops?
+\begin{minted}{bash}
+$ for i in {1..100}; do curl 104.154.44.41; done
+Hello from server-1!
+Hello from server-3!
+curl: (7) Failed to connect to 104.154.44.41 port 80: Connection refused
+\end{minted}
+The load balancer doesn't know anything about our servers, so it can't tell if it should send traffic there or not. Let's educate our load balancer:
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Educating your load balancer}
+  We need our load balancer to know that the server on port 80 should be available. Therefore, we create a health-check for it:
+  \begin{minted}{bash}
+$ gcloud compute http-health-checks create frontend-check
+Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/global/httpHealthChecks/frontend-check].
+NAME           HOST PORT REQUEST_PATH
+frontend-check      80   /
+$ gcloud compute target-pools add-health-checks frontend-targetpool --http-health-check frontend-check --region=us-central1
+Updated [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/regions/us-central1/targetPools/frontend-targetpool].
+$ for i in {1..100}; do curl 104.154.44.41; done
+Hello from server-1!
+Hello from server-3!
+Hello from server-1!
+Hello from server-1!
+Hello from server-3!
+Hello from server-3!
+Hello from server-3!
+Hello from server-1!
+Hello from server-3!
+Hello from server-1!
+Hello from server-3!
+Hello from server-1!
+Hello from server-1!
+Hello from server-3!
+Hello from server-3!
+$
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Educating your load balancer}
+  For those who don't like the command line, of course we can create the health check in the console:
+  \begin{figure}[fragile]
+    \includegraphics[scale=0.3]{figures/HealthCheck.png}
+  \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Autoscaling}
+  Before autoscaling, we need to create an \emph{instance template}, which describes how big we want our nodes, what OS, and perhaps a startup script.
+  
+  Remember, these nodes must be identical.
+  \begin{figure}
+    \includegraphics[scale=0.3]{figures/InstanceTemplate.png}
+  \end{figure}
+  You can also use a custom image instead of an instance template; this is preferred for complex deployments.
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Autoscaling}
+  Once we have an instance template, we can create an autoscaling instance group:
+  \begin{figure}
+    \includegraphics[scale=0.2]{figures/Autoscale.png}
+  \end{figure}
+\end{frame}
 
 \begin{frame}[fragile]
   \frametitle{Persistent Disks}
