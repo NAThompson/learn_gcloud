@@ -53,11 +53,11 @@ urlcolor=blue
 \begin{frame}[fragile]
 \frametitle{Getting started:}
 \begin{minted}{bash}
- $ curl https://sdk.cloud.google.com | bash
-  $ exec -l $SHELL
-  $ gcloud init
-  $ gcloud auth login
-  $ firefox https://console.developers.google.com
+$ curl https://sdk.cloud.google.com | bash
+$ exec -l $SHELL
+$ gcloud init
+$ gcloud auth login
+$ firefox https://console.developers.google.com
 \end{minted}
 You don't need a gmail account to use gcloud, but you must enter an email into gcloud that then becomes your google account login.
 \end{frame}
@@ -370,6 +370,40 @@ default 10.240.0.0/16 10.240.0.1
 \end{frame}
 
 \begin{frame}[fragile]
+  \frametitle{Startup Scripts}
+  To get an image configured for autoscaling, we need to specify what sort of software we need on the image before it's creation. We can do this via a ``startup script'':
+  \begin{figure}
+    \includegraphics[scale=0.3]{figures/StartupScript.png}
+  \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{Startup Scripts}
+	It works!
+	\begin{minted}{bash}
+	$ curl 130.211.135.33
+	Our startup script works
+	\end{minted}
+	However, this is not a good design; as the startup script is not in source control.
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{Startup Scripts}
+	Once your startup script is in source control, you can easily deploy a new instance via:
+\begin{minted}{bash}
+$ gcloud compute instances create wstartup \
+   --metadata-from-file startup-script=`pwd`/script.sh \
+   --zone=us-central1-b  --tags "http-server"
+Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/zones/us-central1-a/instances/wstartup].
+NAME     ZONE          MACHINE_TYPE  PREEMPTIBLE INTERNAL_IP EXTERNAL_IP    STATUS
+wstartup us-central1-a n1-standard-1             10.240.0.5  104.197.59.116 RUNNING
+$ curl 104.197.59.116
+Our startup script works
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[fragile]
   \frametitle{Load balancing}
   Let's set up a couple servers to learn how to load balance:
   \begin{minted}{bash}
@@ -549,15 +583,9 @@ $ gsutil du -h gs://myfirstbucket123
   \end{minted}
 \end{frame}
 
-\begin{frame}[fragile]
-  \frametitle{Persistent Disks}
-  The need to access to persistent disks via APIs in various languages is very common. gcloud has Python, Node.js, Java, and Ruby bindings. Let's see an example in Python:
-  \begin{minted}{python}
-    $ pip3 install git+https://github.com/GoogleCloudPlatform/gcloud-python.git
-    $ python3 -q
-    >>> from gcloud import storage
-    >>> client = storage.Client(project='learngloud-1184', credentials='')
-  \end{minted}
+\begin{framae}[fragile]
+\frametitle{Google Container Engine}
+Maybe the startup scripts are too painful for real production use.
 \end{frame}
 
 \begin{frame}[fragile]
