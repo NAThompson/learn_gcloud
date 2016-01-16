@@ -573,6 +573,7 @@ $
   \frametitle{Persistent Disks}
   Mounting a bucket to an instance takes a little work (\href{https://github.com/googlecloudplatform/gcsfuse/blob/master/docs/installing.md}{instructions}):
 \begin{minted}{bash}
+$ sudo apt-get install -y fuse
 $ curl -L -O https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/v0.15.0/gcsfuse_0.15.0_amd64.deb
 $ sudo dpkg --install gcsfuse_0.15.0_amd64.deb
 $ mkdir mount_point
@@ -581,7 +582,7 @@ $ time ls mount_point
   talk.log
   real0m2.557s
 $ touch mount_point/file.txt
-touch: cannot touch â€˜mount_point/file.txtâ€™: Input/output error
+touch: cannot touch mount_point/file.txt€™: Input/output error
 \end{minted}
   These networked disks are \emph{incredibly slow}, even read-only.
 \end{frame}
@@ -604,9 +605,49 @@ $ gsutil du -h gs://myfirstbucket123
   \end{minted}
 \end{frame}
 
-\begin{framae}[fragile]
-\frametitle{Google Container Engine}
-Maybe the startup scripts are too painful for real production use.
+\begin{frame}[fragile]
+\frametitle{Service Accounts}
+What is I want my instance to be able to launch other instances? It can't login to my gmail account, so how can this be done? The answer is ``service accounts''. Service accounts can credential non-human agents and allow them to rent resources.
+\begin{minted}{bash}
+$ gcloud compute instances create withservice --scopes compute-rw --zone=us-central1-b
+$ gcloud compute ssh withservice --zone=us-central1-b
+wserviceacct$ gcloud compute instances create another-instance --zone=us-central1-b
+Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/zones/us-central1-b/instances/another-instance].
+NAME             ZONE          MACHINE_TYPE  PREEMPTIBLE INTERNAL_IP EXTERNAL_IP    STATUS
+another-instance us-central1-b n1-standard-1             10.240.0.5  104.197.135.42 RUNNING
+\end{minted}
+However, without a service account scope, we get:
+\begin{minted}{bash}
+$ gcloud compute instances list
+NAME ZONE MACHINE_TYPE PREEMPTIBLE INTERNAL_IP EXTERNAL_IP STATUS
+ERROR: (gcloud.compute.instances.list) Some requests did not succeed:
+ - Insufficient Permission
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Service Accounts}
+Note that even though I gave my instance access to a service account, it still can't read/write to my bucket:
+\begin{minted}{bash}
+withcomputeserviceacct$ gsutil ls gs://mybucket123
+AccessDeniedException: 403 Insufficient Permission
+\end{minted}
+To fix this, we need to give our instance permission to read/write cloud storage:
+\begin{minted}{bash}
+$ gcloud compute instances create can-bucket --zone=us-central1-b --scopes=compute-rw,storage-rw
+\end{minted}
+Now gcsfuse will succeed in a read/write mount of our cloud storage.
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+\frametitle{Estimating Costs}
+gcloud gives a nice website for estimating costs: 
+
+\href{https://cloud.google.com/products/calculator}{https://cloud.google.com/products/calculator}
+
+
 \end{frame}
 
 \begin{frame}[fragile]
