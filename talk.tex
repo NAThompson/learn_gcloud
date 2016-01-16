@@ -94,6 +94,17 @@ You don't need a gmail account to use gcloud, but you must enter an email into g
 \end{frame}
 
 \begin{frame}[fragile]
+  \frametitle{Permissions}
+  The permission levels for a project are
+  \begin{itemize}
+    \item Owners-who can add/remove team members, and rent resources, and are root on resources
+    \item Editors-who can rent resources, and are root on resources
+    \item Viewers-who can't rent resources, but are root on resources
+  \end{itemize}
+\end{frame}
+
+
+\begin{frame}[fragile]
   \frametitle{Starting a Project}
   When you grant someone permission to view/edit/co-own your project, they receive an email asking them if they want to join:
   \begin{figure}
@@ -296,6 +307,16 @@ us-east1-d     us-east1     UP
     rtt min/avg/max/mdev = 154.738/154.878/155.326/0.442 ms
   \end{minted}
   So within-zone communication is fastest, within-region is fast, between-region is slow. (Note how your instance names are resolved via DNS!)
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Regions and Zones}
+Things you rent from Google are classified by their scope in the global/regional/zonal hierarchy. For instance,
+\begin{itemize}
+	\item Images, VM snapshots, firewall rules, and buckets are global resources
+	\item Addresses are regional resources
+	\item Instances and their boot disks are zonal resources
+\end{itemize}
 \end{frame}
 
 \begin{frame}[fragile]
