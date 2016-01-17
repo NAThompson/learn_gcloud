@@ -258,6 +258,75 @@ localhost$ gcloud compute disks snapshot "myfirstvm" \
 $ gcloud compute instances create vm-{1..3} --zone us-central1-b \
    --disk name=firstvm-boot-disk,boot=yes,mode=ro
   \end{minted}
+A read-only boot disk is a pain! This is how we get identical snapshots with read/write boot disks:
+\begin{minted}{bash}
+$ gcloud compute disks create vm-{1..5}  \
+    --source-snapshot "vm-snapshot"  --zone us-central1-b
+$ for i in {1..5}; do gcloud compute instances create vm-$i \
+    --zone=us-central1-b --disk name=vm-$i,mode=rw,boot=yes; done
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Exercise 1:}
+You created an n1-standard-1 VM to serve a website. However, since this VM is handling the load with very little CPU usage, you realize you can save money by using a shared-CPU instance.
+
+Exercise: Use persistent boot disks to migrate your server from an n1-standard-1 instance to an f1-micro instance.
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Exercise 1:}
+Step 1: Create the standard instance:
+\begin{minted}{bash}
+$ gcloud compute instances create myserver \
+    --zone=us-central1-b --machine-type=n1-standard-1 \
+    --tags=http-server
+Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/zones/us-central1-b/instances/myserver].
+NAME     ZONE          MACHINE_TYPE  PREEMPTIBLE INTERNAL_IP EXTERNAL_IP     STATUS
+myserver us-central1-b n1-standard-1             10.240.0.3  130.211.120.111 RUNNING
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Exercise 1:}
+Step 2: Start an nginx-server on this instance:
+\begin{minted}{bash}
+$ gcloud compute ssh myserver --zone=us-central1-b
+myserver$ sudo apt-get update && sudo apt-get install -y nginx
+myserver$ sudo chmod a+rw /var/www/html/index.nginx-debian.html
+myserver$ echo "Hola!" > /var/www/html/index.nginx-debian.html
+myserver$ exit
+$ curl 130.211.120.11 # Make sure it works!
+Hola!
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Exercise 1:}
+Step 3: Delete your instance, but keep the boot disk!
+\begin{minted}{bash}
+$ gcloud compute instances delete myserver \
+   --keep-disks boot --zone=us-central1-b
+ $ gcloud compute disks list
+NAME              ZONE          SIZE_GB TYPE        STATUS
+myserver          us-central1-b 10      pd-standard READY
+\end{minted}
+
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Exercise 1:}
+Step 4: Create a new instance from the boot disk:
+\begin{minted}{bash}
+$ gcloud compute instances create smaller-server \
+--zone=us-central1-b --machine-type=f1-micro \
+    --tags=http-server --disk name=myserver,boot=yes,mode=rw
+Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/zones/us-central1-b/instances/smaller-server].
+NAME           ZONE          MACHINE_TYPE INTERNAL_IP EXTERNAL_IP     STATUS
+smaller-server us-central1-b f1-micro     10.240.0.3  130.211.120.111 RUNNING
+$ curl 130.211.120.111
+Hola!
+\end{minted}
 \end{frame}
 
 \begin{frame}[fragile]
@@ -318,6 +387,35 @@ Things you rent from Google are classified by their scope in the global/regional
 	\item Instances and their boot disks are zonal resources
 \end{itemize}
 \end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Zonal Data Disks}
+In addition to creation of boot disks, you can create zonal data disks:
+\begin{minted}{bash}
+$ gcloud compute disks create "data-disk" --size=200 --zone=us-central1-b
+Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/zones/us-central1-b/disks/data-disk].
+NAME      ZONE          SIZE_GB TYPE        STATUS
+data-disk us-central1-b 200     pd-standard READY
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Zonal Data Disks}
+We can now mount this on an instance:
+\begin{minted}{bash}
+$ gcloud compute instances create datavm \
+   --scopes=compute-rw --zone=us-central1-b
+$ gcloud compute ssh datavm --zone=us-central1-b
+datavm$ gcloud compute instances attach-disk datavm --disk data-disk --zone=us-central1-b
+datavm$ sudo mkdir -p /mnt/pd0
+datavm$ ls -l /dev/disk/by-id/google*	
+datavm$ sudo /usr/share/google/safe_format_and_mount -m "mkfs.ext4 -F" \
+              /dev/disk/by-id/google-persistent-disk-1 /mnt/pd0
+datavm$ df -k
+...
+\end{minted}
+\end{frame}
+
 
 \begin{frame}[fragile]
   \frametitle{Editing Firewalls}
@@ -409,8 +507,8 @@ default 10.240.0.0/16 10.240.0.1
 \end{frame}
 
 \begin{frame}[fragile]
-	\frametitle{Startup Scripts}
-	Once your startup script is in source control, you can easily deploy a new instance via:
+\frametitle{Startup Scripts}
+Once your startup script is in source control, you can easily deploy a new instance via:
 \begin{minted}{bash}
 $ gcloud compute instances create wstartup \
    --metadata-from-file startup-script=`pwd`/script.sh \
@@ -421,6 +519,17 @@ wstartup us-central1-a n1-standard-1             10.240.0.5  104.197.59.116 RUNN
 $ curl 104.197.59.116
 Our startup script works
 \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Startup Scripts}
+Note that you can ssh into your machine before the startup script has finished! To see if your startup script has finished, or to debug your startup script:
+\begin{minted}{bash}
+$ gcloud compute ssh wstartup --zone=us-central1-b
+wstartup$ cat /var/log/startupscript.log
+...
+\end{minted}
+It's sometimes good to place ``echo "Done"'' into your startup script so you know when it's finished.
 \end{frame}
 
 
@@ -531,7 +640,7 @@ $
 
 \begin{frame}[fragile]
   \frametitle{Persistent Disks}
-  If you need storage that is not chained to a particular VM, then you need to use ``buckets'':
+  If you need storage that is not chained to a particular zone, then you need to use ``buckets'':
   \begin{figure}
     \includegraphics[scale=0.2]{figures/Buckets.png}
   \end{figure}
@@ -563,28 +672,43 @@ $
   \frametitle{Persistent Disks}
   \begin{itemize}
   \item gcloud buckets are encrypted on disk
-  \item gcloud buckets are accessible outside zones
+  \item gcloud buckets are accessible outside zones (i.e. have global scope)
   \item Uploads to gcloud buckets are atomic and considered successful once the info is stored in multiple datacenters.
-  \item BLOBs in buckets \emph{cannot be edited}. They can be overwritten, however.
   \end{itemize}
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Persistent Disks}
-  Mounting a bucket to an instance takes a little work (\href{https://github.com/googlecloudplatform/gcsfuse/blob/master/docs/installing.md}{instructions}):
+\frametitle{Persistent Disks}
+Mounting a bucket to an instance takes a little work (\href{https://github.com/googlecloudplatform/gcsfuse/blob/master/docs/installing.md}{instructions}). First let's create a startup script called can-bucket.sh:
 \begin{minted}{bash}
-$ sudo apt-get install -y fuse
-$ curl -L -O https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/v0.15.0/gcsfuse_0.15.0_amd64.deb
-$ sudo dpkg --install gcsfuse_0.15.0_amd64.deb
-$ mkdir mount_point
-$ gcsfuse myfirstbucket123 mount_point
-$ time ls mount_point
-  talk.log
-  real0m2.557s
-$ touch mount_point/file.txt
-touch: cannot touch mount_point/file.txt€™: Input/output error
+#!/bin/bash
+sudo apt-get update
+sudo apt-get install -y fuse emacs
+sudo curl -L -O \
+https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/v0.15.0/gcsfuse_0.15.0_amd64.deb
+sudo dpkg --install gcsfuse_0.15.0_amd64.deb
 \end{minted}
-  These networked disks are \emph{incredibly slow}, even read-only.
+\end{frame}
+\begin{frame}[fragile]
+\frametitle{Persistent Disks}
+Now let's create some instances which have permission to view our bucket:
+\begin{minted}{bash}
+$ gcloud compute instances create can-bucket-{1..3} \
+   --zone=us-central1-b --scopes=storage-full \
+   --metadata-from-file startup-script=can-bucket.sh
+\end{minted}
+The ``scopes=storage-full'' gives our instances permission to mount our buckets.
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Persistent Disks}
+\begin{minted}{bash} 
+$ gcloud compute ssh can-bucket-1 --zone=us-central1-b
+can-bucket-1$ mkdir mount_point
+can-bucket-1$ gcsfuse myfirstbucket123 mount_point
+can-bucket-1$ touch mount_point/file.txt
+\end{minted}
+That'll do it! Try it on your other instances!
 \end{frame}
 
 \begin{frame}[fragile]
@@ -634,7 +758,8 @@ AccessDeniedException: 403 Insufficient Permission
 \end{minted}
 To fix this, we need to give our instance permission to read/write cloud storage:
 \begin{minted}{bash}
-$ gcloud compute instances create can-bucket --zone=us-central1-b --scopes=compute-rw,storage-rw
+$ gcloud compute instances create can-bucket \
+   --zone=us-central1-b --scopes=compute-rw,storage-rw
 \end{minted}
 Now gcsfuse will succeed in a read/write mount of our cloud storage.
 \end{frame}
@@ -646,8 +771,6 @@ Now gcsfuse will succeed in a read/write mount of our cloud storage.
 gcloud gives a nice website for estimating costs: 
 
 \href{https://cloud.google.com/products/calculator}{https://cloud.google.com/products/calculator}
-
-
 \end{frame}
 
 \begin{frame}[fragile]
