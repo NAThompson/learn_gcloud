@@ -809,7 +809,8 @@ Now gcsfuse will succeed in a read/write mount of our cloud storage.
 Why does the following command fail?
 \begin{minted}{bash}
 $ gcloud compute instances create somevm \
- --zone=us-central1-b --metadata startup-script-url=gs://myfirstbucket123/gs_startup_script.sh
+ --zone=us-central1-b \
+  --metadata startup-script-url=gs://myfirstbucket123/gs_startup_script.sh
 \end{minted}
 \end{frame}
 
