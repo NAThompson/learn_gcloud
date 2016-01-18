@@ -392,7 +392,8 @@ Things you rent from Google are classified by their scope in the global/regional
 \frametitle{Zonal Data Disks}
 In addition to creation of boot disks, you can create zonal data disks:
 \begin{minted}{bash}
-$ gcloud compute disks create "data-disk" --size=200 --zone=us-central1-b
+$ gcloud compute disks create "data-disk" \
+   --size=200 --zone=us-central1-b
 Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/zones/us-central1-b/disks/data-disk].
 NAME      ZONE          SIZE_GB TYPE        STATUS
 data-disk us-central1-b 200     pd-standard READY
@@ -511,7 +512,7 @@ default 10.240.0.0/16 10.240.0.1
 Once your startup script is in source control, you can easily deploy a new instance via:
 \begin{minted}{bash}
 $ gcloud compute instances create wstartup \
-   --metadata-from-file startup-script=`pwd`/script.sh \
+   --metadata-from-file startup-script=script.sh \
    --zone=us-central1-b  --tags "http-server"
 Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/zones/us-central1-a/instances/wstartup].
 NAME     ZONE          MACHINE_TYPE  PREEMPTIBLE INTERNAL_IP EXTERNAL_IP    STATUS
@@ -528,10 +529,9 @@ Note that you can ssh into your machine before the startup script has finished! 
 $ gcloud compute ssh wstartup --zone=us-central1-b
 wstartup$ cat /var/log/startupscript.log
 ...
+ubuntu startupscript: Finished running startup script /var/run/google.startup.script
 \end{minted}
-It's sometimes good to place ``echo "Done"'' into your startup script so you know when it's finished.
 \end{frame}
-
 
 \begin{frame}[fragile]
   \frametitle{Load balancing}
@@ -764,6 +764,14 @@ $ gcloud compute instances create can-bucket \
 Now gcsfuse will succeed in a read/write mount of our cloud storage.
 \end{frame}
 
+\begin{frame}[fragile]
+\frametitle{Exercise}
+Why does the following command fail?
+\begin{minted}{bash}
+$ gcloud compute instances create somevm \
+ --zone=us-central1-b --metadata startup-script-url=gs://myfirstbucket123/gs_startup_script.sh
+\end{minted}
+\end{frame}
 
 
 \begin{frame}[fragile]
