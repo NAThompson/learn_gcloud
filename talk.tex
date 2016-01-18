@@ -620,7 +620,7 @@ $
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Autoscaling}
+  \frametitle{Instance Templates}
   Before autoscaling, we need to create an \emph{instance template}, which describes how big we want our nodes, what OS, and perhaps a startup script.
   
   Remember, these nodes must be identical.
@@ -631,12 +631,52 @@ $
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Autoscaling}
-  Once we have an instance template, we can create an autoscaling instance group:
-  \begin{figure}
-    \includegraphics[scale=0.2]{figures/Autoscale.png}
-  \end{figure}
+\frametitle{Instance Templates}
+To create the instance template from the command line using a startup script, use:
+\begin{minted}{bash}
+$ gcloud compute instance-templates create my-instance-template \
+  --machine-type=f1-micro --scopes=compute-rw,storage-full \
+   --tags=http-server \
+    --metadata-from-file startup-script=server_startup.sh
+\end{minted}
+Question 1: Why didn't we need to specify a zone here?
+
+Question 2: Why do we need to tag this with ``http-server''?
 \end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Instance Groups}
+Once we have an instance template, we can create an autoscaling instance group:
+\begin{figure}
+    \includegraphics[scale=0.2]{figures/Autoscale.png}
+\end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Instance Groups}
+Command-line for creating instance groups:
+\begin{minted}{bash}
+$  gcloud compute instance-groups managed create my-instance-group \
+   --zone us-central1-b --template my-instance-template \
+    --base-instance-name my-instance-group --size 1
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Autoscaling an Instance Group}
+Command line:
+\begin{minted}{bash}
+$ gcloud compute instance-groups managed set-autoscaling "my-instance-group" \
+    --zone "us-central1-b" --cool-down-period "60" \
+    --max-num-replicas "4" --min-num-replicas "1" \
+    --target-cpu-utilization "0.6"
+\end{minted}
+This should now start autoscaling based on load!
+
+\end{frame}
+
+
+
 
 \begin{frame}[fragile]
   \frametitle{Persistent Disks}
