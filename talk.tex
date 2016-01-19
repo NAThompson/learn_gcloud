@@ -95,12 +95,15 @@ You don't need a gmail account to use gcloud, but you must enter an email into g
 
 \begin{frame}[fragile]
   \frametitle{Permissions}
-  The permission levels for a project are
-  \begin{itemize}
-    \item Owners-who can add/remove team members, and rent resources, and are root on resources
-    \item Editors-who can rent resources, and are root on resources
-    \item Viewers-who can't rent resources, but are root on resources
-  \end{itemize}
+The permission levels for a project are
+\begin{itemize}
+\pause
+\item Owners-who can add/remove team members, and rent resources, and are root on resources
+\pause	
+\item Editors-who can rent resources, and are root on resources
+\pause
+\item Viewers-who can't rent resources, but are root on resources
+\end{itemize}
 \end{frame}
 
 
@@ -131,22 +134,22 @@ or visit the \href{https://cloud.google.com/compute/docs/access/user-accounts/}{
 
 
 \begin{frame}[fragile]
-  \frametitle{Starting a project}
-  You need tell the gcloud command-line tool that you've created a new project:
-  \begin{minted}{bash}
-    $ gcloud config list
-    [core]
-    account = nickadamthompson@gmail.com
-    disable_usage_reporting = True
-    project = graphical-cairn-97618 
-    [meta]
-    active_config = default
-  \end{minted}
-  If the \texttt{project} field has the wrong value, you need to set it:
-  \begin{minted}{bash}
-    $ gcloud config set project learngcloud-1184
-  \end{minted}
-  Note that you don't set the project \emph{name}, you set the project \emph{ID}.
+\frametitle{Starting a project}
+You need tell the gcloud command-line tool that you've created a new project:
+\begin{minted}{bash}
+$ gcloud config list
+[core]
+account = nickadamthompson@gmail.com
+disable_usage_reporting = True
+project = graphical-cairn-97618 
+[meta]
+active_config = default
+\end{minted}
+If the \texttt{project} field has the wrong value, you need to set it:
+\begin{minted}{bash}
+$ gcloud config set project learngcloud-1184
+\end{minted}
+Note that you don't set the project \emph{name}, you set the project \emph{ID}.
 \end{frame}
 
 
@@ -204,17 +207,172 @@ or visit the \href{https://cloud.google.com/compute/docs/access/user-accounts/}{
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Setting up an instance}
-  For every console action, there is a equivalent gcloud command. So, for example, to set up an instance, you could type
-  \begin{minted}{bash}
-    $ gcloud compute instances create mysecondvm \
-         --image ubuntu-15-10 --zone us-central1-b
-  \end{minted}
-  This is useful for scripting.
+\frametitle{Setting up an instance}
+For every console action, there is a equivalent gcloud command. So, for example, to set up an instance, you could type
+\begin{minted}{bash}
+$ gcloud compute instances create mysecondvm \
+      --image ubuntu-15-10 --zone us-central1-b
+\end{minted}
+This is useful for scripting.
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Snapshotting an instance}
+\frametitle{Exercise}
+Why doesn't the following code work?
+\begin{minted}{bash}
+local$ gcloud compute instances create vm1 --zone us-central1-b
+local$ gcloud compute ssh vm1
+vm1$ gcloud compute instances create vm2 --zone us-central1-b
+ERROR: (gcloud.compute.instances.create) Failed to find image for alias [debian-7-backports] in public image project [debian-cloud].
+ - Insufficient Permission
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Solution}
+\emph{You} are logged into gcloud, and can rent resources. However, your VM isn't you, and it doesn't have permission to rent resources on your behalf.
+
+You can solve this problem by authorizing your VM to be able to rent resources using a \emph{service account}.
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Service Accounts}
+To authorize a VM to rent resources on your behalf, use the \emph{scopes} tag:
+\begin{minted}{bash}
+$ gcloud compute instances create vm-scoped \
+    --scopes compute-rw --zone us-central1-b
+\end{minted}
+This gives your vm permission to spawn new vms.
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Startup Scripts}
+  To get an image configured for autoscaling, we need to specify what sort of software we need on the image before it's creation. We can do this via a ``startup script'':
+  \begin{figure}
+    \includegraphics[scale=0.5]{figures/StartupScript.png}
+  \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{Startup Scripts}
+	It works!
+	\begin{minted}{bash}
+	$ curl 130.211.135.33
+	Our startup script works
+	\end{minted}
+	However, this is not a good design; as the startup script is not in source control.
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Startup Scripts}
+Once your startup script is in source control, you can easily deploy a new instance via:
+\begin{minted}{bash}
+$ gcloud compute instances create wstartup \
+   --metadata-from-file startup-script=script.sh \
+   --zone=us-central1-b  --tags "http-server"
+Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/zones/us-central1-a/instances/wstartup].
+NAME     ZONE          MACHINE_TYPE  PREEMPTIBLE INTERNAL_IP EXTERNAL_IP    STATUS
+wstartup us-central1-a n1-standard-1             10.240.0.5  104.197.59.116 RUNNING
+$ curl 104.197.59.116
+Our startup script works
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Startup Scripts}
+Note that you can ssh into your machine before the startup script has finished! To see if your startup script has finished, or to debug your startup script:
+\begin{minted}{bash}
+$ gcloud compute ssh wstartup --zone=us-central1-b
+wstartup$ cat /var/log/startupscript.log
+...
+ubuntu startupscript: Finished running startup script /var/run/google.startup.script
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Regions and Zones}
+Google divides the world into regions:
+\begin{minted}{bash}
+$ gcloud compute regions list
+NAME         CPUS          DISKS_GB     ADDRESSES RESERVED_ADDRESSES STATUS TURNDOWN_DATE
+asia-east1      0.00/24.00     10/10240      0/23      0/7           UP
+europe-west1    0.00/24.00      0/10240      0/23      0/7           UP
+us-central1     4.00/24.00     40/10240      4/23      0/7           UP
+us-east1        0.00/24.00      0/10240      0/23      0/7           UP
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Regions and Zones}
+And each region is divided into multiple zones
+\begin{minted}{bash}
+$ gcloud compute zones list
+NAME           REGION       STATUS NEXT_MAINTENANCE TURNDOWN_DATE
+asia-east1-a   asia-east1   UP
+asia-east1-b   asia-east1   UP
+asia-east1-c   asia-east1   UP
+europe-west1-b europe-west1 UP
+europe-west1-d europe-west1 UP
+europe-west1-c europe-west1 UP
+us-central1-c  us-central1  UP
+us-central1-a  us-central1  UP
+us-central1-f  us-central1  UP
+us-central1-b  us-central1  UP
+us-east1-c     us-east1     UP
+us-east1-b     us-east1     UP
+us-east1-d     us-east1     UP
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Regions and Zones}
+A zone is essentially single datacenter, so two instances in a zone can communicate very quickly with one another:
+\begin{minted}{bash}
+vmcentral1b-1$ ping vmcentral1b-2 # ping VM in same datacenter/zone:
+rtt min/avg/max/mdev = 0.308/0.394/0.841/0.104 ms
+vmcentral1b-1$ ping vmcentral1a # Ping VM in same region, different zone:
+rtt min/avg/max/mdev = 0.571/0.673/1.210/0.099 ms
+vmcentral1b-1$ ping vm-in-asia 
+rtt min/avg/max/mdev = 154.738/154.878/155.326/0.442 ms
+\end{minted}
+ So within-zone communication is fastest, within-region is fast, between-region is slow. (Note how your instance names are resolved via DNS!)
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Regions and Zones}
+Things you rent from Google are classified by their scope in the global/regional/zonal hierarchy. For instance,
+\begin{itemize}
+	\item Images, VM snapshots, firewall rules, and buckets are global resources
+	\item Addresses are regional resources
+	\item Instances and their boot disks are zonal resources
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Exercise}
+Why does google need to ask us for the zone for almost every command?
+\begin{minted}{bash}
+$ gcloud compute instances describe vm2
+For the following instances:
+ - [vm2]
+choose a zone:
+ [1] asia-east1-a
+ ...
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Solution}
+Everything action in gcloud is achieved via REST (representational state transfer).
+
+This is a POST/GET/DELETE/PUT request to an html endpoint, and the endpoint url contains the zone!
+\begin{figure}
+\includegraphics[scale=0.3]{figures/EquivalentRest.png}
+\end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Snapshotting an instance}
   Once you have installed your favorite software on your VM, you might want to snapshot it:
   \begin{minted}{bash}
 myfirstvm$ sudo apt-get update
@@ -330,65 +488,6 @@ Hola!
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Regions and Zones}
-  Google divides the world into regions:
-  \begin{minted}{bash}
-$ gcloud compute regions list
-NAME         CPUS          DISKS_GB     ADDRESSES RESERVED_ADDRESSES STATUS TURNDOWN_DATE
-asia-east1      0.00/24.00     10/10240      0/23      0/7           UP
-europe-west1    0.00/24.00      0/10240      0/23      0/7           UP
-us-central1     4.00/24.00     40/10240      4/23      0/7           UP
-us-east1        0.00/24.00      0/10240      0/23      0/7           UP
-  \end{minted}
-\end{frame}
-
-\begin{frame}[fragile]
-  \frametitle{Regions and Zones}
-  And each region is divided into multiple zones
-\begin{minted}{bash}
-$ gcloud compute zones list
-NAME           REGION       STATUS NEXT_MAINTENANCE TURNDOWN_DATE
-asia-east1-a   asia-east1   UP
-asia-east1-b   asia-east1   UP
-asia-east1-c   asia-east1   UP
-europe-west1-b europe-west1 UP
-europe-west1-d europe-west1 UP
-europe-west1-c europe-west1 UP
-us-central1-c  us-central1  UP
-us-central1-a  us-central1  UP
-us-central1-f  us-central1  UP
-us-central1-b  us-central1  UP
-us-east1-c     us-east1     UP
-us-east1-b     us-east1     UP
-us-east1-d     us-east1     UP
-\end{minted}
-\end{frame}
-
-\begin{frame}[fragile]
-  \frametitle{Regions and Zones}
-  A zone is essentially single datacenter, so two instances in a zone can communicate very quickly with one another:
-  \begin{minted}{bash}
-    vmcentral1b-1$ ping vmcentral1b-2 # ping VM in same datacenter/zone:
-    rtt min/avg/max/mdev = 0.308/0.394/0.841/0.104 ms
-    vmcentral1b-1$ ping vmcentral1a # Ping VM in same region, different zone:
-    rtt min/avg/max/mdev = 0.571/0.673/1.210/0.099 ms
-    vmcentral1b-1$ ping vm-in-asia 
-    rtt min/avg/max/mdev = 154.738/154.878/155.326/0.442 ms
-  \end{minted}
-  So within-zone communication is fastest, within-region is fast, between-region is slow. (Note how your instance names are resolved via DNS!)
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Regions and Zones}
-Things you rent from Google are classified by their scope in the global/regional/zonal hierarchy. For instance,
-\begin{itemize}
-	\item Images, VM snapshots, firewall rules, and buckets are global resources
-	\item Addresses are regional resources
-	\item Instances and their boot disks are zonal resources
-\end{itemize}
-\end{frame}
-
-\begin{frame}[fragile]
 \frametitle{Zonal Data Disks}
 In addition to creation of boot disks, you can create zonal data disks:
 \begin{minted}{bash}
@@ -487,50 +586,6 @@ $ gcloud compute networks list
 NAME    IPV4_RANGE    GATEWAY_IPV4
 default 10.240.0.0/16 10.240.0.1    
   \end{minted}
-\end{frame}
-
-\begin{frame}[fragile]
-  \frametitle{Startup Scripts}
-  To get an image configured for autoscaling, we need to specify what sort of software we need on the image before it's creation. We can do this via a ``startup script'':
-  \begin{figure}
-    \includegraphics[scale=0.3]{figures/StartupScript.png}
-  \end{figure}
-\end{frame}
-
-\begin{frame}[fragile]
-	\frametitle{Startup Scripts}
-	It works!
-	\begin{minted}{bash}
-	$ curl 130.211.135.33
-	Our startup script works
-	\end{minted}
-	However, this is not a good design; as the startup script is not in source control.
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Startup Scripts}
-Once your startup script is in source control, you can easily deploy a new instance via:
-\begin{minted}{bash}
-$ gcloud compute instances create wstartup \
-   --metadata-from-file startup-script=script.sh \
-   --zone=us-central1-b  --tags "http-server"
-Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/zones/us-central1-a/instances/wstartup].
-NAME     ZONE          MACHINE_TYPE  PREEMPTIBLE INTERNAL_IP EXTERNAL_IP    STATUS
-wstartup us-central1-a n1-standard-1             10.240.0.5  104.197.59.116 RUNNING
-$ curl 104.197.59.116
-Our startup script works
-\end{minted}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Startup Scripts}
-Note that you can ssh into your machine before the startup script has finished! To see if your startup script has finished, or to debug your startup script:
-\begin{minted}{bash}
-$ gcloud compute ssh wstartup --zone=us-central1-b
-wstartup$ cat /var/log/startupscript.log
-...
-ubuntu startupscript: Finished running startup script /var/run/google.startup.script
-\end{minted}
 \end{frame}
 
 \begin{frame}[fragile]
