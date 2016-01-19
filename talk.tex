@@ -890,15 +890,90 @@ Now gcsfuse will succeed in a read/write mount of our cloud storage.
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{Exercise}
-Why does the following command fail?
-\begin{minted}{bash}
-$ gcloud compute instances create somevm \
- --zone=us-central1-b \
-  --metadata startup-script-url=gs://myfirstbucket123/gs_startup_script.sh
-\end{minted}
+  \frametitle{Exercise}
+  Construct a load-balancing, fault tolerant, autoscaling http server. Make sure the autoscaling metric is http traffic.
 \end{frame}
 
+\begin{frame}[fragile]
+  \frametitle{Solution}
+  Since we want to demonstrate that the autoscaler works under heavy traffic, let's have nginx serve a large image; here's some from NASA:
+
+  \href{http://earthobservatory.nasa.gov/IOTD/view.php?id=77627}{http://earthobservatory.nasa.gov/IOTD/view.php?id=77627}
+
+  Put whatever image you chose in your bucket; I called mine ``nasa.jpg''
+  \begin{minted}{bash}
+    $ gsutil cp nasa.jpg gs://myfirstbucket123
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Solution}
+  Now we need to create a startup script; call it autoscaler\_startup.sh:
+  \begin{minted}{bash}
+#!/bin/bash
+sudo apt-get update
+sudo apt-get install -y nginx
+sudo chmod a+rw /var/www/html/index.nginx-debian.html
+sudo echo "<!DOCTYPE html>
+<html>
+<body>
+<img src='nasa.jpg'>
+</body>
+</html>" > /var/www/html/index.nginx-debian.html
+sudo gsutil cp gs://myfirstbucket123/nasa.jpg /var/www/html/nasa.jpg
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Solution}
+  Now let's create an instance template:
+  \begin{minted}{bash}
+    $ gcloud compute instance-templates create server-template \
+    --machine-type f1-micro --scopes=storage-full --tags http-server \
+    --metadata-from-file startup-script=autoscaler_startup.sh
+  \end{minted}
+  (Why do we need the tag http-server? Why do we need the scopes=storage-full? Why don't we need --zone?)
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Solution}
+  Now create the base instance of the autoscaling group:
+  \begin{minted}{bash}
+$ gcloud compute instance-groups managed create server-group \
+ --zone us-central1-b --template server-template \
+ --size 1 --base-instance-name server
+  \end{minted}
+  And the autoscaling group:
+  \begin{minted}{bash}
+$ gcloud compute instance-groups managed set-autoscaling server-group \
+ --zone us-central1-b --cool-down-period 180 --max-num-replicas 5 \
+ --min-num-replicas 1 --target-cpu-usage 0.3
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Solution}
+  Now configure your target pool:
+\begin{minted}{bash}
+$ gcloud compute target-pools create mypool --region us-central1
+$ gcloud compute forwarding-rules create myforwardingrule \
+   --target-pool mypool --region us-central1
+$ gcloud compute http-health-checks create check80
+$ gcloud compute target-pools add-health-checks mypool \
+   --http-health-check check80 --region us-central1
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Solution}
+  The following will request the image over and over:
+  \begin{minted}{bash}
+    $ for i in {1..1000}; \
+    do wget --no-parent --accept=jpg,jpeg,htm,html \
+    --mirror  http://104.197.182.162/; \
+    rm -rf 104.197.182.162/; done;
+  \end{minted}
+\end{frame}
 
 \begin{frame}[fragile]
 \frametitle{Estimating Costs}
