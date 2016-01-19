@@ -342,9 +342,12 @@ rtt min/avg/max/mdev = 154.738/154.878/155.326/0.442 ms
 \frametitle{Regions and Zones}
 Things you rent from Google are classified by their scope in the global/regional/zonal hierarchy. For instance,
 \begin{itemize}
-	\item Images, VM snapshots, firewall rules, and buckets are global resources
-	\item Addresses are regional resources
-	\item Instances and their boot disks are zonal resources
+\pause
+\item Images, VM snapshots, firewall rules, and buckets are global resources
+\pause
+\item Addresses are regional resources
+\pause
+\item Instances and their boot disks are zonal resources
 \end{itemize}
 \end{frame}
 
@@ -426,14 +429,14 @@ $ for i in {1..5}; do gcloud compute instances create vm-$i \
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{Exercise 1:}
+\frametitle{Exercise}
 You created an n1-standard-1 VM to serve a website. However, since this VM is handling the load with very little CPU usage, you realize you can save money by using a shared-CPU instance.
 
 Exercise: Use persistent boot disks to migrate your server from an n1-standard-1 instance to an f1-micro instance.
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{Exercise 1:}
+\frametitle{Exercise}
 Step 1: Create the standard instance:
 \begin{minted}{bash}
 $ gcloud compute instances create myserver \
@@ -446,7 +449,7 @@ myserver us-central1-b n1-standard-1             10.240.0.3  130.211.120.111 RUN
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{Exercise 1:}
+\frametitle{Exercise}
 Step 2: Start an nginx-server on this instance:
 \begin{minted}{bash}
 $ gcloud compute ssh myserver --zone=us-central1-b
@@ -460,7 +463,7 @@ Hola!
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{Exercise 1:}
+\frametitle{Exercise}
 Step 3: Delete your instance, but keep the boot disk!
 \begin{minted}{bash}
 $ gcloud compute instances delete myserver \
@@ -473,7 +476,7 @@ myserver          us-central1-b 10      pd-standard READY
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{Exercise 1:}
+\frametitle{Exercise}
 Step 4: Create a new instance from the boot disk:
 \begin{minted}{bash}
 $ gcloud compute instances create smaller-server \
@@ -486,36 +489,6 @@ $ curl 130.211.120.111
 Hola!
 \end{minted}
 \end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Zonal Data Disks}
-In addition to creation of boot disks, you can create zonal data disks:
-\begin{minted}{bash}
-$ gcloud compute disks create "data-disk" \
-   --size=200 --zone=us-central1-b
-Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/zones/us-central1-b/disks/data-disk].
-NAME      ZONE          SIZE_GB TYPE        STATUS
-data-disk us-central1-b 200     pd-standard READY
-\end{minted}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Zonal Data Disks}
-We can now mount this on an instance:
-\begin{minted}{bash}
-$ gcloud compute instances create datavm \
-   --scopes=compute-rw --zone=us-central1-b
-$ gcloud compute ssh datavm --zone=us-central1-b
-datavm$ gcloud compute instances attach-disk datavm --disk data-disk --zone=us-central1-b
-datavm$ sudo mkdir -p /mnt/pd0
-datavm$ ls -l /dev/disk/by-id/google*	
-datavm$ sudo /usr/share/google/safe_format_and_mount -m "mkfs.ext4 -F" \
-              /dev/disk/by-id/google-persistent-disk-1 /mnt/pd0
-datavm$ df -k
-...
-\end{minted}
-\end{frame}
-
 
 \begin{frame}[fragile]
   \frametitle{Editing Firewalls}
@@ -570,12 +543,27 @@ default-allow-ssh      default 0.0.0.0/0     tcp:22
   Command line to allow AMQP on port 5672 from any source IP, use the command
 \begin{minted}{bash}
 $ gcloud compute firewall-rules \ 
-   create default-allow-amqp --allow tcp:5672
+   create default-allow-amqp --allow tcp:5672 \
+   --target-tags rabbit-server
 Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/global/firewalls/default-allow-amqp].
 NAME               NETWORK SRC_RANGES RULES    SRC_TAGS TARGET_TAGS
-default-allow-amqp default 0.0.0.0/0  tcp:5672
+default-allow-amqp default 0.0.0.0/0  tcp:5672					  rabbit-server
 \end{minted}
-  Creating a firewall rule applies it to all live instances in the project.
+Creating a firewall rule applies it to all live instances in the project, unless you give it a target-tag.
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Target Tags}
+Target tags give us an idea of what our instance is going to be used for. This tag allows traffic on port 80/443:
+\begin{minted}{bash}
+$ gcloud compute instances create webserver \
+ --zone us-central1-b --tags http-server,https-server
+\end{minted}
+Our custom amqp firewall rule will be applied to this server:
+\begin{minted}{bash}
+$ gcloud compute instanes create rabbit \
+--zone us-central1-b --tags rabbit-server
+\end{minted}
 \end{frame}
 
 \begin{frame}[fragile]
@@ -589,30 +577,37 @@ default 10.240.0.0/16 10.240.0.1
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Load balancing}
-  Let's set up a couple servers to learn how to load balance:
-  \begin{minted}{bash}
-$ gcloud compute instances create server-{1..3} \
-    --tags frontends --zone us-central1-a
-$ gcloud compute firewall-rules \
-    create allow80 --allow tcp:80 --target-tags frontends
-$ gcloud compute ssh httpserver-1
-httpserver1$ sudo apt-get update && sudo apt-get install -y nginx emacs
-httpserver1$ sudo emacs /var/www/html/index.nginx-debian.html 
-  \end{minted}
-Edit the file so that it tells us what server it comes from; do the same for httpserver2.
+\frametitle{Load balancing}
+Let's set up a couple servers to learn how to load balance. First, our startup script.sh:
+\begin{minted}{bash}
+#!/bin/bash
+sudo apt-get update
+sudo apt-get install -y nginx emacs
+sudo chmod a+rw /var/www/html/index.nginx-debian.html 
+sudo echo "Hello from $(hostname)" > /var/www/html/index.nginx-debian.html
+\end{minted}  
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Load Balancing}
-  Now let's set up a ``target-pool'', a group of server that responds to requests:
+\frametitle{Load balancing}
+Now create your servers with this startup script:
+ \begin{minted}{bash}
+$ gcloud compute instances create server-{1..3} \
+    --tags http-server --zone us-central1-a \
+    --metadata-from-file startup-script=script.sh
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Load Balancing}
+Now let's set up a ``target-pool'', a group of server that responds to requests:
 \begin{minted}{bash}
 $ gcloud compute target-pools create \
-    frontend-targetpool --region us-central1
+    mypool --region us-central1
 $ gcloud compute target-pools add-instances \ 
-    frontend-targetppol --instances server-{1..3} --zone us-central1-a
+    mypool --instances server-{1..3} --zone us-central1-a
 $ gcloud compute forwarding-rules create \
-  frontend-forwarding --target-pool frontend-targetpool --region us-central1
+  frontend-forwarding --target-pool mypool --region us-central1
 NAME      REGION      IP_ADDRESS     IP_PROTOCOL TARGET
 frontends us-central1 104.154.36.151 TCP         us-central1/targetPools/frontends
 $ for i in {1..100}; do curl 104.154.36.151; done
@@ -637,15 +632,23 @@ The load balancer doesn't know anything about our servers, so it can't tell if i
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Educating your load balancer}
-  We need our load balancer to know that the server on port 80 should be available. Therefore, we create a health-check for it:
-  \begin{minted}{bash}
+\frametitle{Educating your load balancer}
+We need our load balancer to know that the server on port 80 should be available. Therefore, we create a health-check for it:
+\begin{minted}{bash}
 $ gcloud compute http-health-checks create frontend-check
 Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/global/httpHealthChecks/frontend-check].
 NAME           HOST PORT REQUEST_PATH
 frontend-check      80   /
-$ gcloud compute target-pools add-health-checks frontend-targetpool --http-health-check frontend-check --region=us-central1
+$ gcloud compute target-pools add-health-checks mypool \
+   --http-health-check frontend-check --region=us-central1
 Updated [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/regions/us-central1/targetPools/frontend-targetpool].
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Load Balancer with Health Checks}
+Now we shouldn't see many failed requests:
+\begin{minted}{bash}
 $ for i in {1..100}; do curl 104.154.44.41; done
 Hello from server-1!
 Hello from server-3!
@@ -662,16 +665,15 @@ Hello from server-1!
 Hello from server-1!
 Hello from server-3!
 Hello from server-3!
-$
-  \end{minted}
+\end{minted}
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Educating your load balancer}
-  For those who don't like the command line, of course we can create the health check in the console:
-  \begin{figure}[fragile]
+\frametitle{Educating your load balancer}
+For those who don't like the command line, of course we can create the health check in the console:
+\begin{figure}[fragile]
     \includegraphics[scale=0.3]{figures/HealthCheck.png}
-  \end{figure}
+\end{figure}
 \end{frame}
 
 \begin{frame}[fragile]
@@ -730,6 +732,34 @@ This should now start autoscaling based on load!
 
 \end{frame}
 
+\begin{frame}[fragile]
+\frametitle{Zonal Data Disks}
+In addition to creation of boot disks, you can create zonal data disks:
+\begin{minted}{bash}
+$ gcloud compute disks create "data-disk" \
+   --size=200 --zone=us-central1-b
+Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/zones/us-central1-b/disks/data-disk].
+NAME      ZONE          SIZE_GB TYPE        STATUS
+data-disk us-central1-b 200     pd-standard READY
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Zonal Data Disks}
+We can now mount this on an instance:
+\begin{minted}{bash}
+$ gcloud compute instances create datavm \
+   --scopes=compute-rw --zone=us-central1-b
+$ gcloud compute ssh datavm --zone=us-central1-b
+datavm$ gcloud compute instances attach-disk datavm --disk data-disk --zone=us-central1-b
+datavm$ sudo mkdir -p /mnt/pd0
+datavm$ ls -l /dev/disk/by-id/google*	
+datavm$ sudo /usr/share/google/safe_format_and_mount -m "mkfs.ext4 -F" \
+              /dev/disk/by-id/google-persistent-disk-1 /mnt/pd0
+datavm$ df -k
+...
+\end{minted}
+\end{frame}
 
 
 
