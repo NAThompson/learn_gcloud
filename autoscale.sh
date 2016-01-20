@@ -5,6 +5,9 @@ sudo apt-get install -y nginx
 sudo chmod a+rw /var/www/html/index.nginx-debian.html
 sudo echo "<!DOCTYPE html>
 <html>
+<head>
+<title>$(hostname)</title>
+</head>
 <body>
 <img src='nasa.jpg'>
 </body>

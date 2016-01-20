@@ -577,7 +577,7 @@ default 10.240.0.0/16 10.240.0.1
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{Load balancing}
+\frametitle{Network Load balancing}
 Let's set up a couple servers to learn how to load balance. First, our startup script.sh:
 \begin{minted}{bash}
 #!/bin/bash
@@ -589,7 +589,7 @@ sudo echo "Hello from $(hostname)" > /var/www/html/index.nginx-debian.html
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{Load balancing}
+\frametitle{Network Load balancing}
 Now create your servers with this startup script:
  \begin{minted}{bash}
 $ gcloud compute instances create server-{1..3} \
@@ -599,7 +599,7 @@ $ gcloud compute instances create server-{1..3} \
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{Load Balancing}
+\frametitle{Network Load Balancing}
 Now let's set up a ``target-pool'', a group of server that responds to requests:
 \begin{minted}{bash}
 $ gcloud compute target-pools create \
@@ -620,7 +620,7 @@ Welcome to server-1!
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Load Balancing}
+  \frametitle{Network Load Balancing}
   What happens if one of our servers stops?
 \begin{minted}{bash}
 $ for i in {1..100}; do curl 104.154.44.41; done
@@ -646,7 +646,7 @@ Updated [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/regions
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{Load Balancer with Health Checks}
+\frametitle{Network Load Balancer with Health Checks}
 Now we shouldn't see many failed requests:
 \begin{minted}{bash}
 $ for i in {1..100}; do curl 104.154.44.41; done
@@ -729,7 +729,6 @@ $ gcloud compute instance-groups managed set-autoscaling "my-instance-group" \
     --target-cpu-utilization "0.6"
 \end{minted}
 This should now start autoscaling based on load!
-
 \end{frame}
 
 \begin{frame}[fragile]
@@ -889,9 +888,17 @@ $ gcloud compute instances create can-bucket \
 Now gcsfuse will succeed in a read/write mount of our cloud storage.
 \end{frame}
 
+
+\begin{frame}[fragile]
+  \frametitle{HTTP Load Balancing}
+  Our network load balancer was a regional resource. What if we want low latency connections to anyone in the world?
+
+  We'll do this by setting up \emph{HTTP load balancing}.
+\end{frame}
+
 \begin{frame}[fragile]
   \frametitle{Exercise}
-  Construct a load-balancing, fault tolerant, autoscaling http server. Make sure the autoscaling metric is http traffic.
+  Construct a load-balancing, fault tolerant, autoscaling webserver using an http load balancer.
 \end{frame}
 
 \begin{frame}[fragile]
@@ -916,6 +923,9 @@ sudo apt-get install -y nginx
 sudo chmod a+rw /var/www/html/index.nginx-debian.html
 sudo echo "<!DOCTYPE html>
 <html>
+<head>
+<title>$(hostname)</title>
+</head>
 <body>
 <img src='nasa.jpg'>
 </body>
@@ -939,39 +949,90 @@ sudo gsutil cp gs://myfirstbucket123/nasa.jpg /var/www/html/nasa.jpg
   \frametitle{Solution}
   Now create the base instance of the autoscaling group:
   \begin{minted}{bash}
-$ gcloud compute instance-groups managed create server-group \
- --zone us-central1-b --template server-template \
- --size 1 --base-instance-name server
-  \end{minted}
-  And the autoscaling group:
-  \begin{minted}{bash}
-$ gcloud compute instance-groups managed set-autoscaling server-group \
- --zone us-central1-b --cool-down-period 180 --max-num-replicas 5 \
- --min-num-replicas 1 --target-cpu-usage 0.3
+$ gcloud compute instance-groups managed create usc1b \
+  --template server-template --size 1 --base-instance-name usc1b \
+  --zone us-central1-b
+$ gcloud compute instance-groups managed create euw1b \
+  --template server-template --size 1 --base-instance-name euw1b \
+  --zone europe-west1-b
   \end{minted}
 \end{frame}
 
 \begin{frame}[fragile]
   \frametitle{Solution}
-  Now configure your target pool:
-\begin{minted}{bash}
-$ gcloud compute target-pools create mypool --region us-central1
-$ gcloud compute forwarding-rules create myforwardingrule \
-   --target-pool mypool --region us-central1
+    Make your instance group autoscaling:
+    \begin{minted}{bash}
+$ gcloud compute instance-groups managed set-autoscaling euw1b \
+  --zone europe-west1-b --cool-down-period 180 --max-num-replicas 5 \
+  --min-num-replicas 1 --target-load-balancing-utilization 0.2      
+$ gcloud compute instance-groups managed set-autoscaling usc1b \
+  --zone us-central1-b --cool-down-period 180 --max-num-replicas 5 \
+  --min-num-replicas 1 --target-load-balancing-utilization 0.2
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Solution}
+  Announce that your autoscaling groups are listening on port 80:
+  \begin{minted}{bash}
+    $ gcloud compute instance-groups set-named-ports usc1b \
+    --zone us-central1-b --named-ports http:80
+    $ gcloud compute instance-groups set-named-ports euw1b \
+    --zone europe-west1-b --named-ports http:80
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Solution}
+  Create your health check for fault-tolerance:
+  \begin{minted}{bash}
 $ gcloud compute http-health-checks create check80
-$ gcloud compute target-pools add-health-checks mypool \
-   --http-health-check check80 --region us-central1
   \end{minted}
 \end{frame}
 
 \begin{frame}[fragile]
   \frametitle{Solution}
-  The following will request the image over and over:
+  Create a backend service:
   \begin{minted}{bash}
-    $ for i in {1..1000}; \
-    do wget --no-parent --accept=jpg,jpeg,htm,html \
-    --mirror  http://104.197.182.162/; \
-    rm -rf 104.197.182.162/; done;
+    $ gcloud compute backend-services create web-service \
+    --http-health-check check80
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Solution}
+  Add your autoscaling groups to your backend service:
+  \begin{minted}{bash}
+    $ gcloud compute backend-services add-backend web-service --instance-group usc1b --zone us-central1-b
+    $ gcloud compute backend-services add-backend web-service --instance-group euw1b --zone europe-west1-b
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Solution}
+  Create an URL map:
+  \begin{minted}{bash}
+    $ gcloud compute url-maps create web-map --default-service web-service
+  \end{minted}
+  and a target http proxy:
+  \begin{minted}{bash}
+    $ gcloud compute target-http-proxies create web-proxy --url-map web-map
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  Now create a forwarding rule:
+  \begin{minted}{bash}
+    $ gcloud compute forwarding-rules create http-rule --global --target-http-proxy web-proxy --port-range 80
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Solution}
+  The following will request the image over and over, and should trip the autoscaler:
+  \begin{minted}{bash}
+    $ while true; do wget --no-parent --accept=jpg \
+    --mirror http://130.211.15.20/; rm -rf 130.211.15.20; done;
   \end{minted}
 \end{frame}
 
