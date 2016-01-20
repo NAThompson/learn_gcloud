@@ -676,6 +676,17 @@ For those who don't like the command line, of course we can create the health ch
 \end{figure}
 \end{frame}
 
+
+\begin{frame}[fragile]
+  \frametitle{Session Affinity}
+  What happens if we don't want each http request from a given client to go to a different backend server? We need to give \emph{session affinity} to our target pool:
+  \begin{minted}{bash}
+$ gcloud compute target-pools create mypoolwsession \
+  --session-affinity CLIENT_IP --region us-central1 --health-check check80
+  \end{minted}
+  This ensures that all traffic from a single IP winds up at the same backend server, as long as that server is serving traffic on port 80 successfully.
+\end{frame}
+
 \begin{frame}[fragile]
   \frametitle{Instance Templates}
   Before autoscaling, we need to create an \emph{instance template}, which describes how big we want our nodes, what OS, and perhaps a startup script.
