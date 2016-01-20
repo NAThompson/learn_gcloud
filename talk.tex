@@ -682,7 +682,8 @@ For those who don't like the command line, of course we can create the health ch
   What happens if we don't want each http request from a given client to go to a different backend server? We need to give \emph{session affinity} to our target pool:
   \begin{minted}{bash}
 $ gcloud compute target-pools create mypoolwsession \
-  --session-affinity CLIENT_IP --region us-central1 --health-check check80
+    --session-affinity CLIENT_IP --region us-central1 \
+    --health-check check80
   \end{minted}
   This ensures that all traffic from a single IP winds up at the same backend server, as long as that server is serving traffic on port 80 successfully.
 \end{frame}
@@ -734,7 +735,8 @@ $  gcloud compute instance-groups managed create my-instance-group \
 \frametitle{Autoscaling an Instance Group}
 Command line:
 \begin{minted}{bash}
-$ gcloud compute instance-groups managed set-autoscaling "my-instance-group" \
+  $ gcloud compute instance-groups managed \
+    set-autoscaling "my-instance-group" \
     --zone "us-central1-b" --cool-down-period "60" \
     --max-num-replicas "4" --min-num-replicas "1" \
     --target-cpu-utilization "0.6"
@@ -761,7 +763,8 @@ We can now mount this on an instance:
 $ gcloud compute instances create datavm \
    --scopes=compute-rw --zone=us-central1-b
 $ gcloud compute ssh datavm --zone=us-central1-b
-datavm$ gcloud compute instances attach-disk datavm --disk data-disk --zone=us-central1-b
+datavm$ gcloud compute instances attach-disk datavm \
+        --disk data-disk --zone=us-central1-b
 datavm$ sudo mkdir -p /mnt/pd0
 datavm$ ls -l /dev/disk/by-id/google*	
 datavm$ sudo /usr/share/google/safe_format_and_mount -m "mkfs.ext4 -F" \
@@ -794,7 +797,7 @@ datavm$ df -k
     $ gsutil cp talk.log gs://myfirstbucket123
     Copying file://talk.log [Content-Type=application/octet-stream]...
     Uploading   gs://myfirstbucket123/talk.log:                      43.94 KiB/43.94 KiB
-    ~/learn_gcloud$ gsutil ls
+    $ gsutil ls
     gs://myfirstbucket123/
     $ gsutil ls -l gs://myfirstbucket123
     44993  2016-01-09T21:19:30Z  gs://myfirstbucket123/talk.log
@@ -863,42 +866,6 @@ $ gsutil du -h gs://myfirstbucket123
 43.94 KiB   gs://myfirstbucket123/talk.log
   \end{minted}
 \end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Service Accounts}
-What is I want my instance to be able to launch other instances? It can't login to my gmail account, so how can this be done? The answer is ``service accounts''. Service accounts can credential non-human agents and allow them to rent resources.
-\begin{minted}{bash}
-$ gcloud compute instances create withservice --scopes compute-rw --zone=us-central1-b
-$ gcloud compute ssh withservice --zone=us-central1-b
-wserviceacct$ gcloud compute instances create another-instance --zone=us-central1-b
-Created [https://www.googleapis.com/compute/v1/projects/learngcloud-1184/zones/us-central1-b/instances/another-instance].
-NAME             ZONE          MACHINE_TYPE  PREEMPTIBLE INTERNAL_IP EXTERNAL_IP    STATUS
-another-instance us-central1-b n1-standard-1             10.240.0.5  104.197.135.42 RUNNING
-\end{minted}
-However, without a service account scope, we get:
-\begin{minted}{bash}
-$ gcloud compute instances list
-NAME ZONE MACHINE_TYPE PREEMPTIBLE INTERNAL_IP EXTERNAL_IP STATUS
-ERROR: (gcloud.compute.instances.list) Some requests did not succeed:
- - Insufficient Permission
-\end{minted}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Service Accounts}
-Note that even though I gave my instance access to a service account, it still can't read/write to my bucket:
-\begin{minted}{bash}
-withcomputeserviceacct$ gsutil ls gs://mybucket123
-AccessDeniedException: 403 Insufficient Permission
-\end{minted}
-To fix this, we need to give our instance permission to read/write cloud storage:
-\begin{minted}{bash}
-$ gcloud compute instances create can-bucket \
-   --zone=us-central1-b --scopes=compute-rw,storage-rw
-\end{minted}
-Now gcsfuse will succeed in a read/write mount of our cloud storage.
-\end{frame}
-
 
 \begin{frame}[fragile]
   \frametitle{HTTP Load Balancing}
@@ -1014,8 +981,10 @@ $ gcloud compute http-health-checks create check80
   \frametitle{Solution}
   Add your autoscaling groups to your backend service:
   \begin{minted}{bash}
-    $ gcloud compute backend-services add-backend web-service --instance-group usc1b --zone us-central1-b
-    $ gcloud compute backend-services add-backend web-service --instance-group euw1b --zone europe-west1-b
+$ gcloud compute backend-services add-backend web-service \
+  --instance-group usc1b --zone us-central1-b
+$ gcloud compute backend-services add-backend web-service \
+  --instance-group euw1b --zone europe-west1-b
   \end{minted}
 \end{frame}
 
@@ -1023,18 +992,21 @@ $ gcloud compute http-health-checks create check80
   \frametitle{Solution}
   Create an URL map:
   \begin{minted}{bash}
-    $ gcloud compute url-maps create web-map --default-service web-service
+    $ gcloud compute url-maps create web-map \
+    --default-service web-service
   \end{minted}
   and a target http proxy:
   \begin{minted}{bash}
-    $ gcloud compute target-http-proxies create web-proxy --url-map web-map
+    $ gcloud compute target-http-proxies \
+    create web-proxy --url-map web-map
   \end{minted}
 \end{frame}
 
 \begin{frame}[fragile]
   Now create a forwarding rule:
   \begin{minted}{bash}
-    $ gcloud compute forwarding-rules create http-rule --global --target-http-proxy web-proxy --port-range 80
+    $ gcloud compute forwarding-rules create http-rule \
+    --global --target-http-proxy web-proxy --port-range 80
   \end{minted}
 \end{frame}
 
