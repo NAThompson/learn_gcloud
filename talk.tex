@@ -1020,6 +1020,47 @@ $ gcloud compute backend-services add-backend web-service \
 \end{frame}
 
 \begin{frame}[fragile]
+\frametitle{Preemptible Instances}
+You can easily halve your bill by using preemptible compute instances:
+\begin{minted}{bash}
+$ gcloud compute instances create preempt-me --preemptible
+\end{minted}
+The instance can be shutdown by Google at any time, and is guaranteed to be shutdown in 24 hours.
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Preemptible Instances}
+In order to shutdown gracefully, gcloud allows you to define a shutdown script, which is a set of actions performed when the computer shuts down:
+\begin{minted}{bash}
+$ gcloud compute instances create preempt-me --preemptible --metadata-from-file shutdown-script=shutdown.sh
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Preemptible Instances}
+Example shutdown script:
+\begin{minted}{bash}
+#!/bin/bash
+echo "Shutdown requested at $(date)"
+echo "Attempting to gracefully shutdown nginx:"
+nginx -s quit #Keeps serving open requests, doesn't accept new.
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Preemptible Instances}
+We can test our shutdown script by stopping the instance in the console. The result should show:
+\begin{minted}{bash}
+$ cat /var/log/shutdownscript.log
+Jan 28 04:48:46 preempt3 shutdownscript: Running shutdown script /var/run/google.shutdown.script
+Jan 28 04:48:46 preempt3 shutdownscript: Shutdown requested at Thu Jan 28 04:48:46 UTC 2016
+Jan 28 04:48:46 preempt3 shutdownscript: Attempting to gracefully shutdown nginx:
+Jan 28 04:48:46 preempt3 shutdownscript: Finished running shutdown script /var/run/google.shutdown.script
+\end{minted}
+\end{frame}
+
+
+\begin{frame}[fragile]
 \frametitle{Estimating Costs}
 gcloud gives a nice website for estimating costs: 
 
