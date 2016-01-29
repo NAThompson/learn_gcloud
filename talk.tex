@@ -769,12 +769,72 @@ datavm$ sudo mkdir -p /mnt/pd0
 datavm$ ls -l /dev/disk/by-id/google*	
 datavm$ sudo /usr/share/google/safe_format_and_mount -m "mkfs.ext4 -F" \
               /dev/disk/by-id/google-persistent-disk-1 /mnt/pd0
-datavm$ df -k
-...
+datavm$ lsblk
+NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+sda      8:0    0   10G  0 disk
+??sda1   8:1    0   10G  0 part /
+sdb      8:16   0  200G  0 disk /mnt/pd0
 \end{minted}
 \end{frame}
 
+\begin{frame}[fragile]
+\frametitle{Zonal Data Disks}
+Zonal data disks can only be mounted read/write on a single instance. However, they can be mounted read-only on many instances:
+\begin{minted}{bash}
+$ gcloud compute instances attach-disk datavm \
+   --disk data-disk --mode ro
+$ gcloud compute ssh datavm
+datavm$ lsblk
+NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+ sda      8:0    0   10G  0 disk
+-->sda1   8:1    0   10G  0 part /
+ sdb      8:16   0  200G  1 disk
+$ sudo /usr/share/google/safe_format_and_mount \
+    -m "mkfs.ext4 -F" /dev/sdb /mnt/pd2
+\end{minted}
+\end{frame}
 
+\begin{frame}[fragile]
+\frametitle{Zonal Data Disks}
+Resizing zonal data disks is super-easy:
+\begin{minted}{bash}
+$ gcloud beta compute disks resize data-disk --size 250GB
+\end{minted}
+It's easier to manage one huge disk than tons of small ones, and \href{https://cloud.google.com/compute/docs/disks/persistent-disks}{throughput is higher} on larger disks.
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Zonal Data Disks}
+Exercise: Attach a zonal data disk (read-only) to a preemptible f1-micro instance during instance creation. Use a startup script to mount the volume.
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Solution}
+Let's begin with our startup script, call it ``attach\_disk.sh'':
+\begin{minted}{bash}
+#!/bin/bash
+stat /dev/disk/by-id/google-my-pd
+if [ $? -ne 0 ]; then
+    echo "Block device not found."
+    exit 1;
+fi
+sudo mkdir /mnt/pd0
+sudo /usr/share/google/safe_format_and_mount \
+    -m "mkfs.ext4 -F" /dev/disk/by-id/google-my-pd /mnt/pd0
+\end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Solution}
+Now create the instance:
+\begin{minted}{bash}
+$ gcloud compute instances create testing123 \
+   --disk name=data-disk,boot=no,mode=ro,device-name=my-pd
+   --machine-type f1-micro --preemptible
+   --metadata-from-file startup-script=attach_disk.sh
+\end{minted}
+(Notice the association between the mount point and the device name?)
+\end{frame}
 
 \begin{frame}[fragile]
   \frametitle{Persistent Disks}
@@ -821,7 +881,7 @@ Mounting a bucket to an instance takes a little work (\href{https://github.com/g
 \begin{minted}{bash}
 #!/bin/bash
 sudo apt-get update
-sudo apt-get install -y fuse emacs
+sudo apt-get install -y fuse
 sudo curl -L -O \
 https://github.com/GoogleCloudPlatform/gcsfuse/releases/download/v0.15.0/gcsfuse_0.15.0_amd64.deb
 sudo dpkg --install gcsfuse_0.15.0_amd64.deb
@@ -1032,7 +1092,8 @@ The instance can be shutdown by Google at any time, and is guaranteed to be shut
 \frametitle{Preemptible Instances}
 In order to shutdown gracefully, gcloud allows you to define a shutdown script, which is a set of actions performed when the computer shuts down:
 \begin{minted}{bash}
-$ gcloud compute instances create preempt-me --preemptible --metadata-from-file shutdown-script=shutdown.sh
+$ gcloud compute instances create preempt-me --preemptible \
+ --metadata-from-file shutdown-script=shutdown.sh
 \end{minted}
 \end{frame}
 
